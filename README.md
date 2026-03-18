@@ -1,4 +1,5 @@
 Gumawa ka ng frontend natin html & css na lahat ng ito nakalagay:
+(by 3 days dapat may mapakita na design)
 
 - Login / Create Account Pages
   Design clean forms for username, password, and student ID (beep ID integration placeholder).
