@@ -1,0 +1,38 @@
+<!DOCTYPE html> <!-- ✅ Declares this is an HTML5 document -->
+<html>
+<head>
+  <title>Library System</title> <!-- ✅ Title shown in browser tab -->
+</head>
+<body>
+  <h1>Add Book</h1> <!-- ✅ Page heading -->
+
+  <!-- ✅ Form for entering book details -->
+  <form id="bookForm">
+    <input type="text" id="name" placeholder="Book Name"><br> <!-- ✅ Input field for book name -->
+    <input type="text" id="author" placeholder="Author"><br> <!-- ✅ Input field for author -->
+    <input type="text" id="code" placeholder="Code"><br> <!-- ✅ Input field for book code -->
+    <button type="submit">Add</button> <!-- ✅ Submit button -->
+  </form>
+
+  <script>
+    // ✅ Add an event listener to the form
+    // This runs when the user clicks "Add"
+    document.getElementById("bookForm").addEventListener("submit", function(e) {
+      e.preventDefault(); // ✅ Prevents the page from refreshing (default form behavior)
+
+      // ✅ Send data to backend using fetch()
+      fetch("http://localhost:8080/addBook", { // ✅ Calls your C++ backend route
+        method: "POST",                        // ✅ Use POST method to send data
+        headers: { "Content-Type": "application/json" }, // ✅ Tell backend we’re sending JSON
+        body: JSON.stringify({                 // ✅ Convert form data into JSON format
+          name: document.getElementById("name").value,   // ✅ Get book name from input
+          author: document.getElementById("author").value, // ✅ Get author from input
+          code: document.getElementById("code").value      // ✅ Get code from input
+        })
+      })
+      .then(res => res.text()) // ✅ Convert backend response into text
+      .then(msg => alert(msg)); // ✅ Show backend message in an alert box
+    });
+  </script>
+</body>
+</html>
