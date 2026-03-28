@@ -1,5 +1,5 @@
 Main Focus: Implement the actual processes of borrowing, reserving, and tracking books.
-(3 days from now it should be already running at least the basic)
+(I need it beofre March 29, 2026 ends)
 
 Tasks:
 - Login & Account Handling
@@ -17,3 +17,11 @@ Tasks:
 - Integration
   Connect frontend forms (HTML) with backend functions.
   Ensure smooth data flow between UI and database
+
+Backend C++ Coder
+- Implement login validation and account handling.
+- Code reservation and lending logic (borrow, return, update status).
+- Develop credit score mechanism (deductions, restrictions).
+- Add notification triggers for overdue books (SMS/Gmail).
+- Integrate frontend forms with backend functions.
+- Ensure smooth data flow between UI and database.
