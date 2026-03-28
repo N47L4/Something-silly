@@ -28,3 +28,14 @@ Gumawa ka ng frontend natin html & css na lahat ng ito nakalagay:
   Consistent layout across all pages.
   Use clear navigation (menu bar: Home, Search, Reservation, Account, Admin).
   Responsive design (works on desktop and mobile).
+
+
+Frontend HTML Designer
+- Build login/create account pages (forms, error messages).
+- Design admin dashboard for book data entry.
+- Create search & reservation interface with filters.
+- Implement slot imagery (green = available, red = borrowed).
+- Design borrower account page (borrowed books, due dates, credit score).
+- Style notifications and alerts section.
+- Ensure responsive, user-friendly design.
+
