@@ -1,5 +1,5 @@
 Gawa ka ng flowchart ng each of the following:
-(you have 2 weeks to make this)
+(I need it beofre March 29, 2026 ends)
 
 1.Login / Create Account System
 - User opens system → decision (existing account?) → login or create → validate/save → access granted.
@@ -17,3 +17,17 @@ Gawa ka ng flowchart ng each of the following:
 - System checks due dates → decision (overdue?) → yes (send SMS/Gmail alert, deduct credit score) / no (no action) → update borrower record.
 8.Borrower Record Management
 - Student ID beep scan → fetch borrower details (name, contact, history) → update record with borrow/return → store permanently in database.
+
+Flowchart Specialist / Tester
+- Create flowcharts for all modules:
+- Login/Create Account
+- Data Entry (Admin)
+- Lending Item
+- Credit Score Mechanism
+- Reservation System
+- Slot Imagery (Availability)
+- Overdue Notification
+- Borrower Record Management
+- Test each module for bugs and errors.
+- Document test results and prepare user manual.
+- Assist with presentation slides and demo.
