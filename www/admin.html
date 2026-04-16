@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="admin">
+    <!-- Admin dashboard page: dynamic admin behavior enabled -->
+    <header class="app-bar">
+        <h1>Admin Dashboard</h1>
+        <div class="top-actions">
+            <span id="admin-name"></span>
+            <a class="button secondary" href="login.html">Logout</a>
+        </div>
+    </header>
+    <main class="admin-shell">
+        <section class="section-panel">
+            <h2>Add New Book</h2>
+            <form id="admin-add-book-form">
+                <label>Title<input id="book-title" type="text" required /></label>
+                <label>Author<input id="book-author" type="text" required /></label>
+                <label>Category
+                    <select id="book-category" required>
+                        <option value="">Choose category</option>
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="English">English</option>
+                        <option value="Science">Science</option>
+                        <option value="History">History</option>
+                        <option value="Music">Music</option>
+                        <option value="Arts">Arts</option>
+                        <option value="P.E.">P.E.</option>
+                        <option value="Health">Health</option>
+                        <option value="Literature">Literature</option>
+                        <option value="T.L.E.">T.L.E.</option>
+                        <option value="Computer">Computer</option>
+                        <option value="ESP/Values">ESP/Values</option>
+                        <option value="Filipino">Filipino</option>
+                    </select>
+                </label>
+                <button type="submit">Add Book</button>
+            </form>
+            <p id="admin-alert" class="alert"></p>
+        </section>
+        <section class="section-panel" id="adminSummary">
+            <h2>Report</h2>
+            <div class="summary-grid" id="summary-cards"></div>
+        </section>
+        <section class="section-panel">
+            <h2>Book Inventory</h2>
+            <div class="inventory-panel">
+                <div class="inventory-actions">
+                    <button id="select-all-books" type="button" class="button secondary">Select All</button>
+                    <button id="mark-selected-available" type="button" class="button">Mark Selected Available</button>
+                    <button id="mark-selected-borrowed" type="button" class="button secondary">Mark Selected Borrowed</button>
+                    <select id="admin-category-filter">
+                        <option value="">All categories</option>
+                    </select>
+                </div>
+                <div class="inventory-wrapper">
+                    <div class="card-grid" id="book-inventory"></div>
+                </div>
+            </div>
+        </section>
+        <section class="section-panel">
+            <h2>Audit Log</h2>
+            <div class="audit-list" id="audit-log"></div>
+        </section>
+    </main>
+    <div id="admin-detail-modal" class="modal hidden">
+        <div class="modal-panel">
+            <button id="admin-detail-close" class="modal-close" type="button">×</button>
+            <h2 id="admin-detail-heading">Borrower Details</h2>
+            <div id="admin-detail-body"></div>
+            <div class="modal-actions">
+                <button id="admin-detail-confirm" type="button" class="button">Mark Available</button>
+                <button id="admin-detail-cancel" type="button" class="button secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

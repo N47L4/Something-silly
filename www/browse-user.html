@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browse Books - Logged In</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="browse-user">
+    <!-- Browse page for logged-in users: can reserve books for 5 hours -->
+    <header class="app-bar">
+        <h1>Browse Books</h1>
+        <div class="top-actions">
+            <a class="button secondary" href="user.html">My Account</a>
+            <a class="button" href="index.html">Logout</a>
+        </div>
+    </header>
+    <main class="page-shell">
+        <section class="section-panel">
+            <h2>Available Library Catalog</h2>
+            <p>As a logged-in borrower, you can reserve available books for 5 hours before they become available again.</p>
+        </section>
+        <section class="section-panel">
+            <form id="browse-search-form" class="search-panel">
+                <input id="search-input" type="search" placeholder="Search title, author, category" />
+                <select id="status-filter">
+                    <option value="">All statuses</option>
+                    <option value="available">Available</option>
+                    <option value="borrowed">Borrowed</option>
+                </select>
+                <button type="submit">Search</button>
+            </form>
+        </section>
+        <section class="section-panel">
+            <div class="card-grid" id="book-grid"></div>
+        </section>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>

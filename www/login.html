@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - Inventory System</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="login">
+    <!-- Login page: static HTML form only, no JavaScript behavior -->
+    <main class="form-shell">
+        <h1>Login</h1>
+        <form method="POST" action="/login">
+            <label>Username<input type="text" name="username" required /></label>
+            <label>Password<input type="password" name="password" required /></label>
+            <button type="submit">Sign In</button>
+            <div class="form-footer">
+                <a href="register.html">Create an account</a>
+                <a href="index.html">Back to home</a>
+            </div>
+        </form>
+        <p class="alert">{{MESSAGE}}</p>
+    </main>
+</body>
+</html>
