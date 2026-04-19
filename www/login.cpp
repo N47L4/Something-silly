@@ -93,7 +93,10 @@ static const std::map<std::string, std::string> BOOK_TITLE_MAP = {
 std::string replaceAll(std::string text, const std::string &search, const std::string &replacement);
 std::map<std::string, std::string> parseQueryString(const std::string &query);
 std::string buildBorrowedBooksHtml(const std::string &username);
+std::string buildReservedBooksHtml(const std::string &username);
+void cleanupExpiredReservations();
 std::string renderUserPage(const std::string &username, const std::map<std::string, std::string> &queryParams);
+std::string renderBrowsePage(const std::string &username);
 std::string jsonEscape(const std::string &text);
 std::string getAccountsJson();
 std::vector<std::string> splitString(const std::string &value, char delimiter);
@@ -227,6 +230,19 @@ std::map<std::string, std::string> parseQueryString(const std::string &query) {
     return parseFormData(query);
 }
 
+bool isAllowedRedirectPath(const std::string &path) {
+    static const std::vector<std::string> allowed = {
+        "/",
+        "index.html",
+        "/index.html",
+        "browse.html",
+        "/browse.html",
+        "user.html",
+        "/user.html"
+    };
+    return std::find(allowed.begin(), allowed.end(), path) != allowed.end();
+}
+
 std::string formatTimeRemaining(std::time_t expiry) {
     std::time_t now = currentTime();
     long seconds = static_cast<long>(expiry - now);
@@ -249,8 +265,15 @@ std::string formatTimeRemaining(std::time_t expiry) {
 
 std::string buildBorrowedBooksHtml(const std::string &username) {
     std::ostringstream html;
+    html << "<article class=\"card\"><h3>No borrowed books</h3><p>You currently have no borrowed books.</p></article>\n";
+    return html.str();
+}
+
+std::string buildReservedBooksHtml(const std::string &username) {
+    std::ostringstream html;
     bool found = false;
     std::time_t now = currentTime();
+    cleanupExpiredReservations();
     for (const auto &entry : bookReservations) {
         if (entry.second.first == username && entry.second.second > now) {
             found = true;
@@ -262,11 +285,12 @@ std::string buildBorrowedBooksHtml(const std::string &username) {
             if (it != BOOK_TITLE_MAP.end()) {
                 title = it->second;
             }
-            html << "<article class=\"card\">"
+            html << "<article class=\"card book-card\">" 
                  << "<h3>" << title << "</h3>"
-                 << "<p>Status: Pending</p>"
-                 << "<p>Reserved until " << buffer << "</p>"
-                 << "<p>Time remaining: " << formatTimeRemaining(entry.second.second) << "</p>"
+                 << "<p><strong>Book ID:</strong> " << entry.first << "</p>"
+                 << "<p><strong>Reserved until:</strong> " << buffer << "</p>"
+                 << "<p><strong>Time remaining:</strong> " << formatTimeRemaining(entry.second.second) << "</p>"
+                 << "<button class=\"button-small danger cancel-reservation-btn\" type=\"button\" data-book-id=\"" << entry.first << "\" onclick=\"if(confirm('Cancel this reservation?')) { handleCancelReservation('" << entry.first << "'); }\">Cancel</button>"
                  << "</article>\n";
         }
     }
@@ -302,7 +326,60 @@ std::string renderUserPage(const std::string &username, const std::map<std::stri
     page = replaceAll(page, "{{STATUS_BORROWED}}", statusBorrowed);
     page = replaceAll(page, "{{SEARCH_RESULTS}}", "");
     page = replaceAll(page, "{{BORROWED_BOOKS}}", buildBorrowedBooksHtml(username));
+    page = replaceAll(page, "{{RESERVED_BOOKS}}", buildReservedBooksHtml(username));
     page = replaceAll(page, "{{NOTIFICATIONS}}", joinNotifications(profile.notifications));
+    return page;
+}
+
+std::string renderBrowsePage(const std::string &username) {
+    std::string page = readFile("browse.html");
+    if (page.empty()) {
+        return std::string();
+    }
+    
+    cleanupExpiredReservations();
+    std::time_t now = currentTime();
+    
+    std::ostringstream bookGrid;
+    for (const auto &entry : BOOK_TITLE_MAP) {
+        const std::string &bookId = entry.first;
+        const std::string &title = entry.second;
+        
+        // Check if book is reserved
+        bool isReserved = false;
+        std::string reservedByUser = "";
+        auto reservation = bookReservations.find(bookId);
+        if (reservation != bookReservations.end() && reservation->second.second > now) {
+            isReserved = true;
+            reservedByUser = reservation->second.first;
+        }
+        
+        // Determine status badge
+        std::string statusLabel = "Available";
+        std::string statusClass = "green";
+        if (isReserved) {
+            statusLabel = "Reserved";
+            statusClass = "blue";
+        }
+        
+        // Build reserve button (only if available and user is logged in)
+        std::string reserveButton = "";
+        if (!isReserved && !username.empty()) {
+            reserveButton = "<button class=\"button reserve-button\" type=\"button\" data-book-id=\"" + bookId + "\">Reserve</button>";
+        }
+        
+        // Add the book card with proper styling
+        bookGrid << "<article class=\"card book-card " << (isReserved ? "reserved-book" : "") << "\">\n"
+                 << "  <h3 " << (isReserved ? "class=\"reserved-title\"" : "") << ">" << title << "</h3>\n"
+                 << "  <p><strong>Book ID:</strong> " << bookId << "</p>\n"
+                 << "  <div class=\"book-actions\">\n"
+                 << "    <div class=\"badge " << statusClass << "\">" << statusLabel << "</div>\n"
+                 << "    " << reserveButton << "\n"
+                 << "  </div>\n"
+                 << "</article>\n";
+    }
+    
+    page = replaceAll(page, "{{BOOK_GRID}}", bookGrid.str());
     return page;
 }
 
@@ -398,6 +475,16 @@ bool reserveBook(const std::string &bookId, const std::string &username, int hou
     }
     if (it->second.first == username) {
         it->second.second = expiry;
+        return saveBookReservations();
+    }
+    return false;
+}
+
+bool cancelReservation(const std::string &bookId, const std::string &username) {
+    cleanupExpiredReservations();
+    auto it = bookReservations.find(bookId);
+    if (it != bookReservations.end() && it->second.first == username) {
+        bookReservations.erase(it);
         return saveBookReservations();
     }
     return false;
@@ -882,14 +969,49 @@ int main() {
             continue;
         }
 
-        if (method == "GET" && path == "/browse.html" && sessionValid) {
-            sendResponse(clientSocket, "302 Found", { {"Location", "/browse-user.html"} }, "");
+        if (method == "GET" && path == "/browse" || method == "GET" && path == "/browse.html") {
+            std::string username = sessionValid ? getUsernameForSession(cookieSession) : "";
+            std::string pageContent = renderBrowsePage(username);
+            if (pageContent.empty()) {
+                sendResponse(clientSocket, "500 Internal Server Error", { {"Content-Type", "text/plain"} }, "Unable to render browse page.");
+            } else {
+                sendResponse(clientSocket, "200 OK", { {"Content-Type", "text/html; charset=utf-8"} }, pageContent);
+            }
             closesocket(clientSocket);
             continue;
         }
 
-        if (method == "GET" && path == "/browse-user.html" && !sessionValid) {
-            sendResponse(clientSocket, "302 Found", { {"Location", "/browse.html"} }, "");
+        if (method == "GET" && path == "/session-status") {
+            std::string username = sessionValid ? getUsernameForSession(cookieSession) : "";
+            std::string bodyJson = std::string("{\"loggedIn\":") + (sessionValid ? "true" : "false") + ",\"username\":\"" + jsonEscape(username) + "\"}";
+            sendResponse(clientSocket, "200 OK", { {"Content-Type", "application/json; charset=utf-8"} }, bodyJson);
+            closesocket(clientSocket);
+            continue;
+        }
+
+        if (method == "GET" && path == "/reservation-count") {
+            if (!sessionValid || getUsernameForSession(cookieSession) != ADMIN_USER) {
+                sendResponse(clientSocket, "403 Forbidden", { {"Content-Type", "application/json; charset=utf-8"} }, "{\"error\":\"Unauthorized\"}");
+                closesocket(clientSocket);
+                continue;
+            }
+            
+            cleanupExpiredReservations();
+            int reservationCount = static_cast<int>(bookReservations.size());
+            std::string bodyJson = "{\"count\":" + std::to_string(reservationCount) + "}";
+            sendResponse(clientSocket, "200 OK", { {"Content-Type", "application/json; charset=utf-8"} }, bodyJson);
+            closesocket(clientSocket);
+            continue;
+        }
+
+        if (method == "GET" && path == "/logout") {
+            if (sessionValid) {
+                sessionUsers.erase(cookieSession);
+            }
+            std::map<std::string, std::string> headersOut;
+            headersOut["Location"] = "index.html";
+            headersOut["Set-Cookie"] = "session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            sendResponse(clientSocket, "302 Found", headersOut, "");
             closesocket(clientSocket);
             continue;
         }
@@ -898,6 +1020,11 @@ int main() {
             auto form = parseFormData(body);
             std::string username = form["username"];
             std::string password = form["password"];
+            std::string redirect = trim(form["redirect"]);
+            auto isSafeRedirect = [&](const std::string &value) {
+                static const std::vector<std::string> allowed = {"index.html", "/index.html", "browse.html", "/browse.html", "user.html", "/user.html"};
+                return std::find(allowed.begin(), allowed.end(), value) != allowed.end();
+            };
 
             if (username == ADMIN_USER && password == ADMIN_PASS) {
                 std::string sessionId = makeSessionId();
@@ -914,7 +1041,11 @@ int main() {
                 std::ostringstream cookieValue;
                 cookieValue << "session=" << sessionId << "; Path=/; HttpOnly";
                 std::map<std::string, std::string> headersOut;
-                headersOut["Location"] = "user.html";
+                std::string location = "user.html";
+                if (isSafeRedirect(redirect)) {
+                    location = redirect;
+                }
+                headersOut["Location"] = location;
                 headersOut["Set-Cookie"] = cookieValue.str();
                 sendResponse(clientSocket, "302 Found", headersOut, "");
             } else {
@@ -989,6 +1120,30 @@ int main() {
             } else {
                 std::string bodyHtml = "<html><body><h1>Reservation failed</h1><p>The book is already reserved by another user.</p><p><a href='user.html'>Return to account</a></p></body></html>";
                 sendResponse(clientSocket, "200 OK", { {"Content-Type", "text/html; charset=utf-8"} }, bodyHtml);
+            }
+            closesocket(clientSocket);
+            continue;
+        }
+
+        if (method == "POST" && path == "/cancel-reservation") {
+            std::string username = getUsernameForSession(cookieSession);
+            if (username.empty()) {
+                sendResponse(clientSocket, "302 Found", { {"Location", "/"} }, "");
+                closesocket(clientSocket);
+                continue;
+            }
+            auto form = parseFormData(body);
+            std::string bookId = trim(form["book"]);
+            if (bookId.empty()) {
+                sendResponse(clientSocket, "400 Bad Request", { {"Content-Type", "application/json; charset=utf-8"} }, "{\"error\":\"No book ID provided.\"}");
+                closesocket(clientSocket);
+                continue;
+            }
+            if (cancelReservation(bookId, username)) {
+                addUserNotification(username, std::string("Cancelled reservation for book ") + bookId + ".");
+                sendResponse(clientSocket, "200 OK", { {"Content-Type", "application/json; charset=utf-8"} }, "{\"success\":true}");
+            } else {
+                sendResponse(clientSocket, "400 Bad Request", { {"Content-Type", "application/json; charset=utf-8"} }, "{\"error\":\"Unable to cancel reservation.\"}");
             }
             closesocket(clientSocket);
             continue;

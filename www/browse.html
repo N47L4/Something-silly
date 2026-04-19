@@ -7,18 +7,18 @@
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body data-page="browse">
-    <!-- Browse page: static catalog view only, no JavaScript behavior -->
+    <!-- Browse page: unified experience for visitors and logged-in borrowers -->
     <header class="app-bar">
         <h1>Browse Books</h1>
         <div class="top-actions">
-            <a class="button secondary" href="index.html">Home</a>
-            <a class="button" href="login.html">Login</a>
+            <a id="primary-action" class="button secondary" href="index.html">Home</a>
+            <a id="secondary-action" class="button" href="login.html">Login</a>
         </div>
     </header>
     <main class="page-shell">
         <section class="section-panel">
             <h2>Available Library Catalog</h2>
-            <p>Visitors can view the full book list and see which titles are available or borrowed.</p>
+            <p id="browse-intro">Visitors can view the full book list and see which titles are available or borrowed.</p>
         </section>
         <section class="section-panel">
             <form id="browse-search-form" class="search-panel">
@@ -26,13 +26,14 @@
                 <select id="status-filter">
                     <option value="">All statuses</option>
                     <option value="available">Available</option>
+                    <option value="reserved">Reserved</option>
                     <option value="borrowed">Borrowed</option>
                 </select>
                 <button type="submit">Search</button>
             </form>
         </section>
         <section class="section-panel">
-            <div class="card-grid" id="book-grid"></div>
+            <div class="card-grid" id="book-grid">{{BOOK_GRID}}</div>
         </section>
     </main>
     <script src="app.js"></script>

@@ -413,7 +413,8 @@ const ALLOWED_CATEGORIES = [
 function loadStoredBooks() {
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        return saved ? JSON.parse(saved) : null;
+        const parsed = saved ? JSON.parse(saved) : null;
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
     } catch (error) {
         return null;
     }
@@ -444,13 +445,15 @@ const ADMIN_STATE = {
             timestamp: new Date().toLocaleString(),
             action: "Reviewed current inventory"
         }
-    ]
+    ],
+    reservations: 0
 };
 
 const selectedBookIds = new Set();
 let ADMIN_ACCOUNTS = [];
 let adminCategoryFilter = "";
 let currentAdminAction = null;
+let currentUserLoggedIn = false;
 
 function populateCategoryFilter() {
     const filter = document.getElementById("admin-category-filter");
@@ -468,24 +471,35 @@ function handleCategoryFilterChange(event) {
     renderBookInventory();
 }
 
-function isUserBrowsePage() {
-    return document.body.dataset.page === "browse-user";
+function isBrowsePage() {
+    return document.body.dataset.page === "browse" || document.body.dataset.page === "browse-user";
+}
+
+function getBookDisplayStatus(book) {
+    if (book.reservedBy) {
+        return "reserved";
+    }
+    return book.status;
 }
 
 function renderBookCard(book) {
     const isReserved = Boolean(book.reservedBy);
-    const effectiveStatus = isReserved ? "borrowed" : book.status;
-    const badgeClass = effectiveStatus === "available" ? "green" : "red";
-    const badgeLabel = effectiveStatus === "available" ? "Available" : isReserved ? "Reserved" : "Borrowed";
-    const statusClass = effectiveStatus === "borrowed" ? "borrowed-book" : "";
+    const effectiveStatus = getBookDisplayStatus(book);
+    const badgeClass = effectiveStatus === "available" ? "green" : effectiveStatus === "reserved" ? "yellow" : "red";
+    const badgeLabel = effectiveStatus === "available" ? "Available" : effectiveStatus === "reserved" ? "Reserved" : "Borrowed";
+    const statusClass = effectiveStatus === "borrowed" ? "borrowed-book" : effectiveStatus === "reserved" ? "reserved-book" : "";
+    const isAdminPage = document.body.dataset.page === "admin";
+    const isBrowse = isBrowsePage();
 
     let actionButton = "";
-    if (isUserBrowsePage() && effectiveStatus === "available") {
+    if (isBrowse && effectiveStatus === "available") {
         actionButton = `<button class="button reserve-button" type="button" data-book-id="${book.id}">Reserve</button>`;
     }
 
-    const reservationInfo = isReserved
-        ? `<p class="book-note"><strong>Reserved by:</strong> ${book.reservedBy} <br /><strong>Until:</strong> ${book.reservedUntil}</p>`
+    // Admin view shows reservation details with username; browse view hides username
+    const showReservationDetails = isReserved && isAdminPage;
+    const reservationInfo = showReservationDetails
+        ? `<p class="book-note reserved-by">Reserved by ${book.reservedBy}<br /><strong>Until:</strong> ${book.reservedUntil}</p>`
         : "";
 
     return `
@@ -513,9 +527,12 @@ function applyReservationData(reservations) {
 
         const reservation = reservationMap.get(String(book.id));
         if (reservation) {
-            book.reservedBy = reservation.username;
-            book.reservedUntil = reservation.reservedUntil;
-            book.reservedExpiresAt = reservation.expiresAt;
+            const expiresAt = new Date(reservation.expiresAt).getTime();
+            if (!Number.isNaN(expiresAt) && expiresAt > Date.now()) {
+                book.reservedBy = reservation.username;
+                book.reservedUntil = reservation.reservedUntil;
+                book.reservedExpiresAt = reservation.expiresAt;
+            }
         }
     });
 }
@@ -537,13 +554,20 @@ function fetchReservationData() {
 function refreshReservationState() {
     return fetchReservationData().then((reservations) => {
         applyReservationData(reservations);
-        if (isUserBrowsePage()) {
+        if (isBrowsePage()) {
             renderBookCatalog(libraryBooks);
         }
         if (document.body.dataset.page === "admin") {
             renderBookInventory();
         }
     });
+}
+
+function startReservationExpirationCheck() {
+    // Check for expired reservations every 30 seconds
+    setInterval(() => {
+        refreshReservationState();
+    }, 30000); // 30 seconds
 }
 
 function renderBookCatalog(books) {
@@ -569,7 +593,7 @@ function filterBooks(query, status) {
     const normalizedQuery = query.trim().toLowerCase();
 
     return libraryBooks.filter((book) => {
-        const effectiveStatus = book.reservedBy ? "borrowed" : book.status;
+        const effectiveStatus = getBookDisplayStatus(book);
         const matchesStatus = status ? effectiveStatus === status : true;
         const matchesQuery = normalizedQuery
             ? [book.title, book.author, book.category]
@@ -595,10 +619,72 @@ function handleSearch(event) {
     renderBookCatalog(filteredBooks);
 }
 
+function updateBrowsePageUi() {
+    const primaryAction = document.getElementById("primary-action");
+    const secondaryAction = document.getElementById("secondary-action");
+    const intro = document.getElementById("browse-intro");
+
+    if (currentUserLoggedIn) {
+        if (primaryAction) {
+            primaryAction.textContent = "My Account";
+            primaryAction.href = "user.html";
+        }
+        if (secondaryAction) {
+            secondaryAction.textContent = "Logout";
+            secondaryAction.href = "logout";
+        }
+        if (intro) {
+            intro.textContent = "As a logged-in borrower, you can reserve available books for 5 hours before they become available again.";
+        }
+    } else {
+        if (primaryAction) {
+            primaryAction.textContent = "Home";
+            primaryAction.href = "index.html";
+        }
+        if (secondaryAction) {
+            secondaryAction.textContent = "Login";
+            secondaryAction.href = "login.html";
+        }
+        if (intro) {
+            intro.textContent = "Visitors can view the full book list and see which titles are available or borrowed.";
+        }
+    }
+}
+
+function loadSessionStatus() {
+    return fetch("/session-status", {
+        credentials: "same-origin"
+    })
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error("Session status request failed.");
+            }
+            return response.json();
+        })
+        .then((data) => {
+            currentUserLoggedIn = Boolean(data.loggedIn);
+            updateBrowsePageUi();
+        })
+        .catch(() => {
+            currentUserLoggedIn = false;
+            updateBrowsePageUi();
+        });
+}
+
+function redirectToLogin(returnPath) {
+    const destination = returnPath || "browse.html";
+    window.location.href = `login.html?redirect=${encodeURIComponent(destination)}`;
+}
+
 function handleReserveButtonClick(button) {
     const bookId = button.dataset.bookId;
     if (!bookId) {
         alert("Unable to read book ID for reservation.");
+        return;
+    }
+
+    if (!currentUserLoggedIn) {
+        redirectToLogin("browse.html");
         return;
     }
 
@@ -617,7 +703,10 @@ function handleReserveButtonClick(button) {
         })
         .then(() => {
             alert("Reservation successful. Please collect the book within 5 hours.");
-            refreshReservationState();
+            // Reload the page to show updated reservation status
+            setTimeout(() => {
+                location.reload(true);
+            }, 500);
         })
         .catch((error) => {
             console.error(error);
@@ -657,7 +746,10 @@ function initBrowsePage() {
         grid.addEventListener("click", handleBrowseCardClick);
     }
 
-    refreshReservationState();
+    loadSessionStatus().then(() => {
+        refreshReservationState();
+        startReservationExpirationCheck();
+    });
 }
 
 function getSummaryCards() {
@@ -665,10 +757,12 @@ function getSummaryCards() {
     const availableBooks = ADMIN_STATE.books.filter((book) => book.status === "available" && !book.reservedBy).length;
     const borrowedBooks = ADMIN_STATE.books.filter((book) => book.status === "borrowed" || book.reservedBy).length;
     const recentActions = ADMIN_STATE.audit.length;
+    const reservations = ADMIN_STATE.reservations;
 
     return [
         { label: "Total Books", value: totalBooks, badge: "green" },
         { label: "Available", value: availableBooks, badge: "green" },
+        { label: "Reservations", value: reservations, badge: "blue" },
         { label: "Borrowed", value: borrowedBooks, badge: "red" },
         { label: "Audit Entries", value: recentActions, badge: "yellow" }
     ];
@@ -688,6 +782,28 @@ function renderSummaryCards() {
             `
         )
         .join("");
+}
+
+function updateReservationCount() {
+    fetch("/reservation-count")
+        .then((response) => {
+            if (!response.ok) throw new Error("Failed to fetch reservation count");
+            return response.json();
+        })
+        .then((data) => {
+            ADMIN_STATE.reservations = data.count;
+            renderSummaryCards();
+        })
+        .catch((error) => {
+            console.error("Error updating reservation count:", error);
+        });
+}
+
+function startReservationCountUpdate() {
+    // Update immediately on start
+    updateReservationCount();
+    // Then update every 30 seconds
+    setInterval(updateReservationCount, 30000);
 }
 
 function getSelectedBookIdsFromDom() {
@@ -715,12 +831,14 @@ function renderBookInventory() {
     container.innerHTML = visibleBooks
         .map((book) => {
             const isChecked = selectedBookIds.has(book.id) ? "checked" : "";
-            const effectiveStatus = book.reservedBy ? "borrowed" : book.status;
-            const statusClass = effectiveStatus === "borrowed" ? "borrowed-book" : "available-book";
+            const effectiveStatus = getBookDisplayStatus(book);
+            const statusClass = effectiveStatus === "borrowed" ? "borrowed-book" : effectiveStatus === "reserved" ? "reserved-book" : "available-book";
             const selectedClass = selectedBookIds.has(book.id) ? "selected-book" : "";
             const reservationInfo = book.reservedBy
-                ? `<p class="book-note"><strong>Reserved by:</strong> ${book.reservedBy}<br /><strong>Until:</strong> ${book.reservedUntil}</p>`
+                ? `<p class="book-note reserved-by">Reserved by ${book.reservedBy}<br /><strong>Until:</strong> ${book.reservedUntil}</p>`
                 : "";
+            const badgeClass = effectiveStatus === "available" ? "green" : effectiveStatus === "reserved" ? "yellow" : "red";
+            const badgeText = effectiveStatus === "available" ? "Available" : effectiveStatus === "reserved" ? "Reserved" : "Borrowed";
 
             return `
                 <article class="card book-card ${statusClass} ${selectedClass}">
@@ -732,13 +850,11 @@ function renderBookInventory() {
                     <p><strong>Author:</strong> ${book.author}</p>
                     <p><strong>Category:</strong> ${book.category}</p>
                     ${reservationInfo}
-                    <div class="badge ${effectiveStatus === "available" ? "green" : "red"}">${effectiveStatus === "available" ? "Available" : "Borrowed"}</div>
+                    <div class="badge ${badgeClass}">${badgeText}</div>
                 </article>
             `;
         })
         .join("");
-
-    updateSelectAllButton();
 }
 
 function formatAdminDetailCard(detail) {
@@ -1103,7 +1219,83 @@ function updateBookStatus(bookId, newStatus) {
     showAdminMessage(`Status updated for ${book.title}.`, "green");
 }
 
+function deleteBookEntry(bookId) {
+    const bookIndex = ADMIN_STATE.books.findIndex((book) => book.id === bookId);
+    if (bookIndex === -1) {
+        showAdminMessage("Unable to find selected book for deletion.", "red");
+        return;
+    }
+
+    const book = ADMIN_STATE.books[bookIndex];
+    const confirmation = window.confirm(
+        `Delete "${book.title}" from the catalog? Only proceed if the physical copy does not exist.`
+    );
+    if (!confirmation) {
+        return;
+    }
+
+    ADMIN_STATE.books.splice(bookIndex, 1);
+    selectedBookIds.delete(bookId);
+    saveStoredBooks(ADMIN_STATE.books);
+    ADMIN_STATE.audit.unshift({
+        id: ADMIN_STATE.audit.length + 1,
+        timestamp: new Date().toLocaleString(),
+        action: `Deleted catalog entry: ${book.title}`
+    });
+
+    renderSummaryCards();
+    renderBookInventory();
+    renderAuditLog();
+    showAdminMessage(`Deleted ${book.title}.`, "green");
+}
+
+function deleteSelectedBooks() {
+    const selectedIds = getSelectedBookIdsFromDom();
+    if (selectedIds.length === 0) {
+        showAdminMessage("Select at least one book to delete.", "red");
+        return;
+    }
+
+    const confirmation = window.confirm(
+        `Delete ${selectedIds.length} selected catalog entr${selectedIds.length === 1 ? "y" : "ies"}? Only proceed if the physical copy does not exist.`
+    );
+    if (!confirmation) {
+        return;
+    }
+
+    const deletedTitles = [];
+    ADMIN_STATE.books = ADMIN_STATE.books.filter((book) => {
+        if (selectedIds.includes(book.id)) {
+            deletedTitles.push(book.title);
+            return false;
+        }
+        return true;
+    });
+    selectedIds.forEach((id) => selectedBookIds.delete(id));
+    saveStoredBooks(ADMIN_STATE.books);
+
+    if (deletedTitles.length > 0) {
+        ADMIN_STATE.audit.unshift({
+            id: ADMIN_STATE.audit.length + 1,
+            timestamp: new Date().toLocaleString(),
+            action: `Deleted ${deletedTitles.length} selected catalog entr${deletedTitles.length === 1 ? "y" : "ies"}`
+        });
+    }
+
+    renderSummaryCards();
+    renderBookInventory();
+    renderAuditLog();
+    showAdminMessage(`Deleted ${deletedTitles.length} selected book${deletedTitles.length === 1 ? "" : "s"}.`, "green");
+}
+
 function handleInventoryClick(event) {
+    const deleteButton = event.target.closest(".delete-book-button");
+    if (deleteButton) {
+        const bookId = Number(deleteButton.dataset.bookId);
+        deleteBookEntry(bookId);
+        return;
+    }
+
     const button = event.target.closest(".status-toggle-button");
     if (button) {
         const bookId = Number(button.dataset.bookId);
@@ -1207,6 +1399,7 @@ function initializeAdminDashboard() {
     const selectAllButton = document.getElementById("select-all-books");
     const markAvailableButton = document.getElementById("mark-selected-available");
     const markBorrowedButton = document.getElementById("mark-selected-borrowed");
+    const deleteSelectedButton = document.getElementById("delete-selected-books");
 
     if (selectAllButton) {
         selectAllButton.addEventListener("click", selectAllInventoryBooks);
@@ -1216,6 +1409,9 @@ function initializeAdminDashboard() {
     }
     if (markBorrowedButton) {
         markBorrowedButton.addEventListener("click", openAdminBorrowedPrompt);
+    }
+    if (deleteSelectedButton) {
+        deleteSelectedButton.addEventListener("click", deleteSelectedBooks);
     }
 
     const modalCloseButton = document.getElementById("admin-detail-close");
@@ -1288,7 +1484,111 @@ function initializeAdminDashboard() {
         renderBookInventory();
         renderAuditLog();
         showAdminMessage("Ready to manage inventory.", "green");
+        startReservationExpirationCheck();
+        startReservationCountUpdate();
     });
+}
+
+function calculateTimeRemaining(expiresAt) {
+    const now = Date.now();
+    const expiryMs = new Date(expiresAt).getTime();
+    const remainingMs = expiryMs - now;
+    
+    if (remainingMs <= 0) {
+        return "Expired";
+    }
+    
+    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else {
+        return `${minutes}m`;
+    }
+}
+
+function renderReservedBooks(reservations) {
+    const container = document.getElementById("reserved-books");
+    if (!container) return;
+    
+    const userReservations = reservations.filter((res) => {
+        // This will be populated by the C++ backend with current user's reservations
+        return true;
+    });
+    
+    if (userReservations.length === 0) {
+        container.innerHTML = `<article class="card"><h3>No reserved books</h3><p>You have no active reservations.</p></article>`;
+        return;
+    }
+    
+    container.innerHTML = userReservations.map((res) => {
+        const timeRemaining = calculateTimeRemaining(res.reservedUntil);
+        const bookTitle = res.bookTitle || `Book ${res.bookId}`;
+        return `
+            <article class="card book-card">
+                <h3>${bookTitle}</h3>
+                <p><strong>Reserved until:</strong> ${res.reservedUntil}</p>
+                <p><strong>Time remaining:</strong> ${timeRemaining}</p>
+                <button class="button danger cancel-reservation-btn" type="button" data-book-id="${res.bookId}">Cancel Reservation</button>
+            </article>
+        `;
+    }).join("");
+}
+
+function handleCancelReservation(bookId) {
+    console.log("Cancelling reservation for book ID:", bookId);
+    
+    fetch("/cancel-reservation", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `book=${encodeURIComponent(bookId)}`
+    })
+        .then((response) => {
+            console.log("Response status:", response.status);
+            if (response.status === 200) {
+                console.log("Cancellation successful, reloading page...");
+                alert("Reservation cancelled successfully!");
+                location.reload(true);
+            } else {
+                alert("Failed to cancel reservation. Status: " + response.status);
+                console.log("Response not OK, status:", response.status);
+            }
+        })
+        .catch((error) => {
+            console.error("Fetch error:", error);
+            alert("Error: " + error.message);
+        });
+}
+
+window.cancelReservation = handleCancelReservation;
+
+function initUserPage() {
+    const reservedBooksContainer = document.getElementById("reserved-books");
+    if (!reservedBooksContainer) return;
+    
+    // Handle cancel button clicks
+    document.addEventListener("click", (event) => {
+        const cancelBtn = event.target.closest(".cancel-reservation-btn");
+        if (cancelBtn) {
+            const bookId = cancelBtn.dataset.bookId;
+            handleCancelReservation(bookId);
+        }
+    });
+    
+    // Load and display reserved books
+    fetchReservationData().then((reservations) => {
+        renderReservedBooks(reservations);
+    });
+    
+    // Update time remaining every minute
+    setInterval(() => {
+        fetchReservationData().then((reservations) => {
+            renderReservedBooks(reservations);
+        });
+    }, 60000);
 }
 
 function initializeApp() {
@@ -1304,6 +1604,10 @@ function initializeApp() {
 
     if (page === "admin") {
         initializeAdminDashboard();
+    }
+    
+    if (page === "user") {
+        initUserPage();
     }
 }
 

@@ -6,11 +6,12 @@
     <title>Login - Inventory System</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
-<body data-page="login">
+<body>
     <!-- Login page: static HTML form only, no JavaScript behavior -->
     <main class="form-shell">
         <h1>Login</h1>
-        <form method="POST" action="/login">
+        <form action="/login" method="POST">
+            <input type="hidden" id="login-redirect" name="redirect" value="" />
             <label>Username<input type="text" name="username" required /></label>
             <label>Password<input type="password" name="password" required /></label>
             <button type="submit">Sign In</button>
@@ -21,5 +22,24 @@
         </form>
         <p class="alert">{{MESSAGE}}</p>
     </main>
+    <script>
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const redirect = params.get('redirect');
+            const redirectInput = document.getElementById('login-redirect');
+            if (redirectInput && redirect) {
+                redirectInput.value = redirect;
+            }
+
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', function() {
+                    if (redirectInput && redirectInput.value) {
+                        redirectInput.value = redirectInput.value.replace(/[^a-zA-Z0-9._\/-]/g, '');
+                    }
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
